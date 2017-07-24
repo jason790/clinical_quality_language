@@ -3,6 +3,7 @@
 { DateTime } = require '../datatypes/datetime'
 { Concept } = require '../datatypes/clinical'
 { parseQuantity } = require './quantity'
+{ matchesTypeSpecifier } = require '../util/type'
 
 # TODO: Casting and Conversion needs unit tests!
 
@@ -14,8 +15,8 @@ module.exports.As = class As extends Expression
     @strict = json.strict ? false
 
   exec: (ctx) ->
-    # TODO: Currently just returns the arg (which works for null, but probably not others)
-    @execArgs(ctx)
+    arg = @execArgs(ctx)
+    if arg? and matchesTypeSpecifier(arg, @asTypeSpecifier) then arg else null
 
 module.exports.ToBoolean = class ToBoolean extends Expression
   constructor: (json) ->

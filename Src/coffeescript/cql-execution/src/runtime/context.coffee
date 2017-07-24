@@ -1,6 +1,8 @@
 { Library } = require '../elm/library'
 { Exception } = require '../datatypes/exception'
 { typeIsArray } = require '../util/util'
+typeUtil = require '../util/type'
+
 util = require 'util'
 Function::property = (prop, desc) ->
   Object.defineProperty @prototype, prop, desc
@@ -16,14 +18,14 @@ module.exports.Context = class Context
     @_parameters = _parameters
 
   @property "parameters" ,
-    get: -> 
+    get: ->
       p = @parent?.parameters
       for k, v of p
-        # If key (of parent) is not found in current parameters, add it 
+        # If key (of parent) is not found in current parameters, add it
         if !(k of @_parameters)
           @_parameters[k] = v
       @_parameters
-    
+
     set: (params) ->
       @checkParameters(params)
       @_parameters = params
@@ -123,73 +125,11 @@ module.exports.Context = class Context
         return # Null can theoretically be any type
       if typeof pDef is "undefined"
         return # This will happen if the parameter is declared in a different (included) library
-      else if pDef.parameterTypeSpecifier? && !@matchesTypeSpecifier(pVal, pDef.parameterTypeSpecifier)
+      else if pDef.parameterTypeSpecifier? && !typeUtil.matchesTypeSpecifier(pVal, pDef.parameterTypeSpecifier)
         throw new Error("Passed in parameter '#{pName}' is wrong type")
-      else if pDef['default']? && !@matchesInstanceType(pVal, pDef['default'])
+      else if pDef['default']? && !typeUtil.matchesInstanceType(pVal, pDef['default'])
         throw new Error("Passed in parameter '#{pName}' is wrong type")
     true
-
-  matchesTypeSpecifier: (val, spec) ->
-    switch spec.type
-      when "NamedTypeSpecifier" then @matchesNamedTypeSpecifier(val, spec)
-      when "ListTypeSpecifier" then @matchesListTypeSpecifier(val, spec)
-      when "TupleTypeSpecifier" then @matchesTupleTypeSpecifier(val, spec)
-      when "IntervalTypeSpecifier" then @matchesIntervalTypeSpecifier(val, spec)
-      else true # default to true when we don't know
-
-  matchesListTypeSpecifier: (val, spec) ->
-    typeIsArray(val) && val.every (x) => @matchesTypeSpecifier(x, spec.elementType)
-
-  matchesTupleTypeSpecifier: (val, spec) ->
-    typeof val is "object" &&
-      ! typeIsArray(val) &&
-      spec.element.every (x) => (typeof val[x.name] is "undefined" || @matchesTypeSpecifier(val[x.name], x.type))
-
-  matchesIntervalTypeSpecifier: (val, spec) ->
-    val.constructor?.name is "Interval" &&
-      ((! val.low?) || @matchesTypeSpecifier(val.low, spec.pointType)) &&
-      ((! val.high?) || @matchesTypeSpecifier(val.high, spec.pointType))
-
-  matchesNamedTypeSpecifier: (val, spec) ->
-    switch spec.name
-      when "{urn:hl7-org:elm-types:r1}Boolean" then typeof val is "boolean"
-      when "{urn:hl7-org:elm-types:r1}Decimal" then typeof val is "number"
-      when "{urn:hl7-org:elm-types:r1}Integer" then typeof val is "number" && Math.floor(val) == val
-      when "{urn:hl7-org:elm-types:r1}String" then typeof val is "string"
-      when "{urn:hl7-org:elm-types:r1}Concept" then val?.constructor?.name is 'Concept'
-      when "{urn:hl7-org:elm-types:r1}DateTime" then val?.constructor?.name is 'DateTime'
-      when "{urn:hl7-org:elm-types:r1}Quantity" then val?.constructor?.name is 'Quantity'
-      when "{urn:hl7-org:elm-types:r1}Time" then val?.constructor?.name is 'DateTime' && val.isTime()
-      else true # TODO: Better checking of custom or complex types
-
-  matchesInstanceType: (val, inst) ->
-    switch inst.constructor?.name
-      when "BooleanLiteral" then typeof val is "boolean"
-      when "DecimalLiteral" then typeof val is "number"
-      when "IntegerLiteral" then typeof val is "number" && Math.floor(val) == val
-      when "StringLiteral" then typeof val is "string"
-      when "Concept" then val?.constructor?.name is "Concept"
-      when "DateTime" then val?.constructor?.name is "DateTime"
-      when "Quantity" then val?.constructor?.name is "Quantity"
-      when "Time" then val?.constructor?.name is "DateTime" && val.isTime()
-      when "List" then @matchesListInstanceType(val, inst)
-      when "Tuple" then @matchesTupleInstanceType(val, inst)
-      when "Interval" then @matchesIntervalInstanceType(val, inst)
-      else true # default to true when we don't know for sure
-
-  matchesListInstanceType: (val, list) ->
-    typeIsArray(val) && val.every (x) => @matchesInstanceType(x, list.elements[0])
-
-  matchesTupleInstanceType: (val, tpl) ->
-    typeof val is "object" &&
-      ! typeIsArray(val) &&
-      tpl.elements.every (x) => (typeof val[x.name] is "undefined" || @matchesInstanceType(val[x.name], x.value))
-
-  matchesIntervalInstanceType: (val, ivl) ->
-    pointType = ivl.low ? ivl.high
-    val.constructor?.name is "Interval" &&
-      ((! val.low?) || @matchesInstanceType(val.low, pointType)) &&
-      ((! val.high?) || @matchesInstanceType(val.high, pointType))
 
 module.exports.PatientContext = class PatientContext extends Context
   constructor: (@library,@patient,codeService,parameters) ->
@@ -199,7 +139,7 @@ module.exports.PatientContext = class PatientContext extends Context
 
   getLibraryContext: (library) ->
     @library_context[library] ||= new PatientContext(@get(library),@patient,@codeService,@parameters)
-    
+
   getLocalIdContext: (localId) ->
     @localId_context[localId] ||= new PatientContext(@get(library),@patient,@codeService,@parameters)
 
